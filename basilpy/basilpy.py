@@ -7,7 +7,7 @@ import mpmath as mp
 mp.dps = 25; mp.pretty = True
 
 
-class basil:
+class basilpy:
     def __init__(self,
                  Non, 
                  Noff, 

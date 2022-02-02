@@ -13,7 +13,7 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='basilpy',
-    version="0.0.1", #get_git_version_pypi(),
+    version="0.0.4", #get_git_version_pypi(),
     packages=find_packages(),
     description='Python code to estimate the signal from an On/Off measurement'
                 'with the BASiL approach [ arXiv:2105.01019 ]',
