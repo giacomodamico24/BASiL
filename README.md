@@ -1,4 +1,4 @@
-# BASiL - basilpy
+# basilpy
 ``basilpy`` is a Python package for estimating the signal from an ON/OFF measurement using the BASiL approach [ arXiv:2105.01019 ]
 
 You can check the theory behind BASiL here https://journals.aps.org/prd/abstract/10.1103/PhysRevD.103.123001
