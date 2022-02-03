@@ -183,13 +183,13 @@ class OnOffMeasurement:
         str_ += f"\t{{:32}}:  {self.alpha} \n\n".format("Alpha")
         
         str_ += f"\t{{:32}}:  {self.excess} \n".format("Excess")
-        str_ += f"\t{{:32}}:  {self.excess_error} \n".format("Error Excess")
+        str_ += f"\t{{:32}}:  {self.excess_error} \n".format("SD Excess")
         str_ += f"\t{{:32}}:  {self.LiMa_significance} \n\n".format("Li&Ma Significance")
         
         if self.run_ok:
             str_ += f"\t{{:32}}:  {self.mode_pdf} \n".format("Most probable signal")
             str_ += f"\t{{:32}}:  {self.mean} \n".format("Expected signal")
-            str_ += f"\t{{:32}}:  {np.sqrt(self.mean)} \n".format("Root mean squared")
+            str_ += f"\t{{:32}}:  {np.sqrt(self.mean)} \n".format("Signal SD")
 
         return str_.expandtabs(tabsize=2)
     
