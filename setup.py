@@ -1,7 +1,6 @@
 from setuptools import setup, find_packages
 from codecs import open
 from os import path
-#from BASiL.version import get_git_version_pypi
 
 here = path.abspath(path.dirname(__file__))
 
@@ -13,15 +12,15 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='basilpy',
-    version="0.0.4", #get_git_version_pypi(),
+    version="0.0.5", #get_git_version_pypi(),
     packages=find_packages(),
     description='Python code to estimate the signal from an On/Off measurement'
-                'with the BASiL approach [ arXiv:2105.01019 ]',
+                'with the BASiL approach [ PhysRevD.103.123001 ]',
     long_description=long_description,  # this is the readme
     long_description_content_type='text/x-rst',
 
     # The project's main homepage.
-    url='https://github.com/giacomodamico24/BASiL',
+    url='https://github.com/giacomodamico24/basilpy',
 
     # Author details
     author="Giacomo D'Amico",

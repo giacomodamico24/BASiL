@@ -7,34 +7,64 @@ import mpmath as mp
 mp.dps = 25; mp.pretty = True
 
 
-class basilpy:
+class OnOffMeasurement:
+    """Perform the computation of the signal PDF
+       from an ON/OFF measurement with the inclusion 
+       of the single event likelihoods of being a signal 
+       or background event.
+       
+       It is also possible to compute statistical parameter
+       like the upper limit, the credible interval, the incerse
+       of the cdf, etc... 
+
+
+    Parameters
+    ----------
+    Non   : init
+        Total count in the ON region
+    Noff  : init
+        Total count in the OFF region
+    alpha : init
+        Normalization factor ON exposure / OFF exposure
+    signal_likelihoods : `array`
+        Array of lenght Non with single events likelihood
+        of being a signal event
+    bkg_likelihoods    : `array`
+        Array of lenght Non with single events likelihood
+        of being a background event
+    
+    """
     def __init__(self,
-                 Non, 
-                 Noff, 
-                 alpha, 
-                 Ns                 = None ,
-                 pmf                = None ,
+                 Non                = None , 
+                 Noff               = None , 
+                 alpha              = None , 
                  signal_likelihoods = None ,
                  bkg_likelihoods    = None ,
+                 
                 ):
         
         self.Non                = Non
         self.Noff               = Noff
         self.alpha              = alpha
-        self.excess             = Non - alpha*Noff
-        self.excess_error       = np.sqrt( Non + alpha**2*Noff)
-        self.LiMa_significance  = LiMaSignificance(Non,Noff,alpha)*np.sign(self.excess)
-        self.Ns                 = Ns
-        self.pmf                = pmf
         self.signal_likelihoods = signal_likelihoods
         self.bkg_likelihoods    = bkg_likelihoods
         
+        self.excess             = Non - alpha*Noff
+        self.excess_error       = np.sqrt( Non + alpha**2*Noff)
+        self.LiMa_significance  = LiMaSignificance(Non,Noff,alpha)*np.sign(self.excess)
+        self.Ns                 = None
+        self.pmf                = None
         self.mean               = None
         self.variance           = None
         self.mode_pmf           = None
+        self.run_ok             = False
     
     
     def run(self,**par):
+        """
+        From Non, Noff, alpha and the events likelihoods
+        it computes the signal events PMF and signal PDF
+        """
         self.Ns ,self.pmf = signal_events_PMF( 
             self.Non, 
             self.Noff, 
@@ -62,6 +92,8 @@ class basilpy:
         self.get_mean_and_variance(**par)
         minusPDF     = lambda x: -1* self.pdf(x)
         self.mode_pdf =minimize(minusPDF,self.mode_pmf,bounds=((0,None),)).x[0]
+        
+        self.run_ok = True
     
     
     def pdf(self,s):
@@ -131,14 +163,14 @@ class basilpy:
         points = np.linspace(start, end, 100)
         return - np.sum( self.pdf( points) )
 
-    def credible_interval(self, alpha ):
+    def credible_interval(self, alpha=0.6827 ):
         max_start   = self.invcdf( 1- alpha)
         x           = np.linspace( 0, max_start,100, endpoint=False) 
         y           = np.array( [self.sum_pdfpoints( alpha, ix) for ix in x] )
         first_guess = x[ np.argmin(y) ]
         cost_func   = partial(self.sum_pdfpoints,alpha)
         start       = minimize(cost_func,first_guess,bounds=((0,max_start*0.9999),)).x[0]
-        end         = bs.upper_limit(alpha, start)
+        end         = self.upper_limit(alpha, start)
         return start, end
     
     
@@ -154,27 +186,31 @@ class basilpy:
         str_ += f"\t{{:32}}:  {self.excess_error} \n".format("Error Excess")
         str_ += f"\t{{:32}}:  {self.LiMa_significance} \n\n".format("Li&Ma Significance")
         
-        str_ += f"\t{{:32}}:  {self.mode_pdf} \n".format("Most probable signal")
-        str_ += f"\t{{:32}}:  {self.mean} \n".format("Expected signal")
-        str_ += f"\t{{:32}}:  {np.sqrt(self.mean)} \n".format("Root mean squared")
-        
-        
-
+        if self.run_ok:
+            str_ += f"\t{{:32}}:  {self.mode_pdf} \n".format("Most probable signal")
+            str_ += f"\t{{:32}}:  {self.mean} \n".format("Expected signal")
+            str_ += f"\t{{:32}}:  {np.sqrt(self.mean)} \n".format("Root mean squared")
 
         return str_.expandtabs(tabsize=2)
+    
+    def __repr__(self):
+        str_ = f"{self.__class__.__name__}"+"("
+        str_ += f"\t {{:1}}: {self.Non}".format("Non")+","
+        str_ += f"\t {{:1}}: {self.Noff}".format("Noff")+","
+        str_ += f"\t {{:1}}: {self.alpha}".format("Alpha")+","
+        
+        if self.signal_likelihoods is None and self.bkg_likelihoods is None:
+            str_ += f"\t Likelihoods: False"+" )"
+        else:
+            str_ += f"\t Likelihoods: True"+" )"
+            
+        return repr(str_.expandtabs(tabsize=1))
 
         
 
 
-
-
-
-    
-
-
-
-
-
+###################################################
+## Log of (Non + Noff - Ns)!/(Non - Ns)! * (1 + 1/alpha)**Ns
 def log_single_term(Ns, Non, Noff,a):
     integer_vals  = np.arange(Non-Ns+1, Non + Noff-Ns+1)
     logfactorial  = np.sum( np.log(integer_vals) )
@@ -182,6 +218,8 @@ def log_single_term(Ns, Non, Noff,a):
     return logfactorial + logsecondterm
 
 
+###################################################
+## PMF of the number of signal events NS
 def signal_events_PMF( Non, Noff, a):
     Ns         = np.arange(0,Non+1)
     vectfunc   = np.vectorize(log_single_term)
@@ -189,25 +227,22 @@ def signal_events_PMF( Non, Noff, a):
     vectexp    = np.vectorize( mp.exp)
     Ns_PMF     = vectexp(log_Ns_PMF)
     Ns_PMF    /= np.sum(Ns_PMF)
-    return Ns, Ns_PMF #np.array(Ns_PMF.tolist(),dtype=np.float32)  
+    return Ns, Ns_PMF 
 
-
-def signal_PDF( s, Non, Noff, a):
-    Ns, PMF = signal_events_PMF(Non, Noff, a)
-    return s, np.sum( [iPMF*scistat.poisson.pmf(iNs,s) for iNs , iPMF in zip(Ns,PMF)] ,axis=0)
-
-
+###################################################
+## Combinatorial term C divided by the binomial term
 def combinatorial_term(a1,a2):
     if len(a1) != len(a2):
         raise ValueError("Likelihoods values must have same lenght!")
     n     = len(a1)
     
+    # First we make one array = 1
     a1 /= a2 
-    a1  = a1 * mp.ones(1,n)
     a2 /= a2
+    # We convert the arrays in mpmath quantities
+    a1  = a1 * mp.ones(1,n)
     a2  = a2 * mp.ones(1,n)
     
-  
     C     = np.concatenate( ( [1.],np.zeros_like(a1) ))
     for i in range(n):
         D = np.concatenate( ( [0.],C[:-1] ))
@@ -217,19 +252,16 @@ def combinatorial_term(a1,a2):
     C       /= binomial
     C       /= np.max(C)
     C       /= np.sum(C) 
-    return C #np.array(C.tolist(),dtype=np.float32)  
+    return C  
 
 
-
-    
-
-
+###################################################
+## CDF of Poisson Function
 def PoissonCDF(s,n):
     vectfuncCDF   = np.vectorize(mp.gammainc)
     cdf = (1- vectfuncCDF(n+1, s)/mp.gamma(n+1))
     return np.float128(cdf)
     
-###################################################
 ###################################################
 ## LI&MA SIGNIFICANCE
 def LiMaSignificance(Non,Noff,alfa):
@@ -237,6 +269,3 @@ def LiMaSignificance(Non,Noff,alfa):
     """
     return np.sqrt( 2*Non* np.log( (1+alfa)/alfa * ( (Non+0.) / (Non+Noff) ) ) + \
                           2*Noff*np.log( (1+alfa)      * ( (Noff+0.)/ (Non+Noff) ) )   )
-
-
-
