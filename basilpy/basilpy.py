@@ -2,6 +2,8 @@ import numpy as np
 import scipy.stats as scistat
 import scipy.integrate as integrate
 from scipy.optimize import minimize
+import scipy.integrate as integrate
+from scipy import interpolate
 from functools import partial
 import mpmath as mp
 mp.dps = 25; mp.pretty = True
@@ -205,6 +207,76 @@ class OnOffMeasurement:
             str_ += f"\t Likelihoods: True"+" )"
             
         return repr(str_.expandtabs(tabsize=1))
+    
+    
+    
+def fake_measurement( s, b, alpha, bkg_pdf=None, signal_pdf=None, efficiency=1, seed=None ):
+    rng  = np.random.default_rng(seed)
+    Ns   = rng.poisson(s)
+    Nb   = rng.poisson(alpha*b)
+    Non  = Ns + Nb
+    
+    Noff = rng.poisson(b)
+    
+    bkg_likelihoods    = None
+    signal_likelihoods = None
+    
+    if signal_pdf is not None and bkg_pdf is not None:
+        x_signal = signal_pdf.fake(Ns,seed)
+        x_bkg    = bkg_pdf.fake(Nb,seed)
+        xON  = np.concatenate( (x_signal,x_bkg))
+        
+        if efficiency <1:
+            cut  = signal_pdf.invcdf(efficiency)
+            xON  = xON[xON<=cut]
+            Non  = len(xON)
+            xOFF = bkg_pdf.fake(Noff,seed)
+            xOFF = xOFF[xOFF<=cut]
+            Noff = len(xOFF)
+            
+        
+        bkg_likelihoods    = bkg_pdf(xON)
+        signal_likelihoods = signal_pdf(xON)
+        
+    return OnOffMeasurement(Non,Noff,alpha, 
+                               bkg_likelihoods    = bkg_likelihoods,
+                               signal_likelihoods = signal_likelihoods)
+
+
+
+
+class PDF:
+    
+    def __init__(self, func=None, pdf_range=[0,1]):
+        
+        self.func      = func
+        self.pdf_range = pdf_range
+        a              = self.pdf_range[0]
+        b              = self.pdf_range[1]
+        self.norm      = 1/integrate.quad(lambda x: func(x), a,b )[0]
+        self.get_cdf_and_invcdf()
+        
+    def __call__(self,x):
+        return self.norm*self.func(x)
+        
+    def get_cdf_and_invcdf(self):
+        a              = self.pdf_range[0]
+        b              = self.pdf_range[1]
+        x              = np.linspace(a,b,1000,endpoint=True)
+        cdf_vals       = np.array([integrate.quad(lambda t: self(t), a,X )[0] for X in x ])
+        if np.sum( cdf_vals ==  np.sort(cdf_vals) ) == len(cdf_vals):
+            self.cdf    =  interpolate.interp1d(x, cdf_vals)
+            self.invcdf =  interpolate.interp1d(cdf_vals, x)
+        else:
+            raise ValueError("PDF is not defined positive in the given range!")
+    
+    def fake(self,n=None,seed=None):
+        if n is None:
+            raise ValueError("Please provide how many variables to simulate!")
+        rng  = np.random.default_rng(seed)
+        u = rng.uniform(0,1,n)
+        return self.invcdf(u)
+        
 
         
 
