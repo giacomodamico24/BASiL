@@ -2,7 +2,6 @@ import numpy as np
 import scipy.stats as scistat
 import scipy.integrate as integrate
 from scipy.optimize import minimize
-import scipy.integrate as integrate
 from scipy import interpolate
 from functools import partial
 import mpmath as mp
@@ -247,23 +246,47 @@ def fake_measurement( s, b, alpha, bkg_pdf=None, signal_pdf=None, efficiency=1, 
 
 class PDF:
     
-    def __init__(self, func=None, pdf_range=[0,1]):
+    def __init__(self, func=None, pdf_range=(0,1),integration_steps=None):
         
         self.func      = func
         self.pdf_range = pdf_range
         a              = self.pdf_range[0]
         b              = self.pdf_range[1]
-        self.norm      = 1/integrate.quad(lambda x: func(x), a,b )[0]
-        self.get_cdf_and_invcdf()
-        
+        if integration_steps is None:
+            self.norm      = 1/integrate.quad(func, a,b )[0]
+        else:
+            ints = [integrate.quad(func, a,b )[0] 
+                    for a, b in zip(integration_steps[:-1],integration_steps[1:])]
+            self.norm = 1/np.sum(ints)
+            
+        self.get_cdf_and_invcdf(integration_steps=integration_steps)
+    
     def __call__(self,x):
         return self.norm*self.func(x)
         
-    def get_cdf_and_invcdf(self):
-        a              = self.pdf_range[0]
-        b              = self.pdf_range[1]
-        x              = np.linspace(a,b,1000,endpoint=True)
-        cdf_vals       = np.array([integrate.quad(lambda t: self(t), a,X )[0] for X in x ])
+    @classmethod   
+    def from_data(cls,data,bins,data_range=(0,1)):
+        hist      = np.histogram( data, bins=bins, range=data_range)
+        x         = hist[1]
+        y         = np.insert( hist[0], -1, hist[0][-1])
+        hist_func = interpolate.interp1d( x, y , kind='previous' )
+        return cls(hist_func, pdf_range=data_range, integration_steps=x)
+        
+        
+    def get_cdf_and_invcdf(self,integration_steps=None):
+        a                = self.pdf_range[0]
+        b                = self.pdf_range[1]
+        if integration_steps is None:
+            x            = np.linspace(a,b,1000,endpoint=True)
+            cdf_vals     = np.array([integrate.quad(self, a,X )[0] for X in x ])
+        else:
+            ints         = [integrate.quad(self, a,b )[0] 
+                            for a, b in zip(integration_steps[:-1],integration_steps[1:])]
+            cdf_vals     = np.cumsum(ints)
+            cdf_vals     = np.insert(cdf_vals,0,0)
+            cdf_vals[-1] = round(cdf_vals[-1])
+            x            = integration_steps
+            
         if np.sum( cdf_vals ==  np.sort(cdf_vals) ) == len(cdf_vals):
             self.cdf    =  interpolate.interp1d(x, cdf_vals)
             self.invcdf =  interpolate.interp1d(cdf_vals, x)
